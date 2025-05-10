@@ -113,30 +113,58 @@ async def webhook(
                     )
                 )
                 db.commit()
+                    # … после того, как вы db.commit() для входящего сообщения …
+    
+    # Собираем последние 10 сообщений
+    history = (
+        db.query(Message)
+          .filter_by(tenant_id=tenant.id)
+          .order_by(Message.id.desc())
+          .limit(10)
+          .all()[::-1]
+    )
+    chat = [{"role": m.role, "content": m.text} for m in history] \
+           or [{"role": "system", "content": tenant.system_prompt}]
+    
+    # **Прямой вызов** генерации и отправки (TEST ONLY)
+    from .ai import get_answer  # или как у вас называется
+    from .main import handle_ai_reply  # если handle_ai_reply в этом же файле
+    
+    # 1) сгенерить через OpenAI
+    answer = await get_answer(chat)  # или await ai.chat…
+    # 2) сразу отправить
+    await send_whatsapp(
+        business_phone_id=tenant.phone_id,
+        token=tenant.wh_token,
+        to=msg["from"],
+        text=answer,
+    )
+    
+    return {"status": "received", "echo": answer}
 
                 # Собираем последние 10 сообщений для контекста
-                history = (
-                    db.query(Message)
-                      .filter_by(tenant_id=tenant.id)
-                      .order_by(Message.id.desc())
-                      .limit(10)
-                      .all()[::-1]
-                )
-                chat = (
-                    [{"role": m.role, "content": m.text} for m in history]
-                    or [{"role": "system", "content": tenant.system_prompt}]
-                )
+#                history = (
+#                    db.query(Message)
+ #                     .filter_by(tenant_id=tenant.id)
+ #                     .order_by(Message.id.desc())
+ #                     .limit(10)
+ #                     .all()[::-1]
+ #               )
+  #              chat = (
+  #                  [{"role": m.role, "content": m.text} for m in history]
+ #                   or [{"role": "system", "content": tenant.system_prompt}]
+  #              )
 
                 # Асинхронно вызываем OpenAI и отправляем ответ в фоне
-                bg.add_task(
-                    handle_ai_reply,
-                    tenant,
-                    chat,
-                    sender,
-                    db,
-                )
+ #               bg.add_task(
+  #                  handle_ai_reply,
+ #                   tenant,
+  #                  chat,
+  #                  sender,
+   #                 db,
+   #             )
 
-    return {"status": "received"}
+   # return {"status": "received"}
 
 # Фоновая задача: запрос к OpenAI + отправка в WhatsApp
 async def handle_ai_reply(
