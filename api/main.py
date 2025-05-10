@@ -28,35 +28,42 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
-    # === TEMP WHATSAPP TEST SEED START ===
-    # Создаём тестового арендатора только в DEV / sandbox
-    from db import SessionLocal
-    from models import Tenant
+    import os
+    from logging.config import fileConfig
+    from alembic.config import Config
+    from alembic import command
 
-    db = SessionLocal()
-    test_phone = os.getenv("WH_PHONE_ID", "15551743822")  # ваш тестовый номер
-    test_token = os.getenv("WH_TOKEN", "EACOZCs8g0GKIBOZBDyrIjfojEnfZBb0OUMWaKU35sZAZCevGIuapwyuIZAlXmnd6PIUTyCXXJZATt6VarUmkYKIPLSNyxdtiZAtnZBqBPC67wZCKOIms1LIP3SJuW6t2MaxlnNkoQQzAotdxQC3vZAIBsoN3swdI85TlJnlytIAWtMOsiQY4hSt2c9lktCkFuEeDozFDq3NZAXoJPCZBYX0wFovj8rNRDaHhwTVnNmFmD")
-    exists = db.query(Tenant).filter_by(phone_id=test_phone).first()
-    if not exists:
-        db.add(Tenant(
-            id="test-tenant",
-            phone_id=test_phone,
-            wh_token=test_token,
-            system_prompt="You are a helpful assistant."
-        ))
-        db.commit()
-    db.close()
-    # === TEMP WHATSAPP TEST SEED END ===
-
-    # Дальше ваши Alembic-миграции…
-    print(">>> STARTUP: running migrations")
+    # === 1) Сначала прогоняем миграции ===
+    print(">>> STARTUP: running Alembic migrations")
     here = os.path.dirname(__file__)
     cfg_path = os.path.join(here, "alembic.ini")
     alembic_cfg = Config(cfg_path)
     fileConfig(alembic_cfg.config_file_name)
     command.upgrade(alembic_cfg, "head")
     print(">>> FINISHED: migrations complete")
-    # … остальной код …
+
+    # === 2) TEMP: seed тестового арендатора ===
+    # (удалить этот блок после проверки WhatsApp)
+    from db import SessionLocal
+    from models import Tenant
+
+    db = SessionLocal()
+    phone = os.getenv("WH_PHONE_ID")  # уже в Variables
+    token = os.getenv("WH_TOKEN")     # уже в Variables
+    if phone and token:
+        exists = db.query(Tenant).filter_by(phone_id=phone).first()
+        if not exists:
+            print(">>> Seeding test tenant")
+            db.add(Tenant(
+                id="test-tenant",
+                phone_id=phone,
+                wh_token=token,
+                system_prompt="You are a helpful assistant."
+            ))
+            db.commit()
+            print(">>> Test tenant seeded")
+    db.close()
+    # === END TEMP SEED ===
 
 
 # Простая проверка здоровья
