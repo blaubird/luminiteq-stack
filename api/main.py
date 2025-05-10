@@ -28,21 +28,36 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
-    # 1) print a marker so you know migration is starting
-    print(">>> STARTUP: running Alembic migrations")
+    print(">>> STARTUP: seeding test tenant and running Alembic migrations")
 
-    # 2) load alembic.ini (which contains your [loggers]/[handlers]/[formatters])
+    # === TEMP WHATSAPP TEST SEED START ===
+    from db import SessionLocal
+    from models import Tenant
+
+    db = SessionLocal()
+    # Создаём в БД «тестового» арендатора только если его нет
+    test_phone = os.getenv("WH_PHONE_ID")
+    if test_phone and not db.query(Tenant).filter_by(phone_id=test_phone).first():
+        db.add(Tenant(
+            id="test-tenant",               # ID для теста
+            phone_id=test_phone,            # из WH_PHONE_ID
+            wh_token=os.getenv("WH_TOKEN"), # из WH_TOKEN
+            system_prompt="You are a helpful assistant."
+        ))
+        db.commit()
+    db.close()
+    # === TEMP WHATSAPP TEST SEED END ===
+
+    # --- Дальше идут Alembic-миграции ---
     here = os.path.dirname(__file__)
-    ini_path = os.path.join(here, "alembic.ini")
-    alembic_cfg = Config(ini_path)
-    # THIS is the critical call that wires in the [loggers] section:
+    cfg_path = os.path.join(here, "alembic.ini")
+    alembic_cfg = Config(cfg_path)
     fileConfig(alembic_cfg.config_file_name)
-
-    # 3) actually run the migrations
     command.upgrade(alembic_cfg, "head")
 
-    # 4) print a marker so you know it finished
-    print(">>> FINISHED: Alembic migrations complete")
+    print(">>> FINISHED: migrations complete")
+
+
 
 # Простая проверка здоровья
 @app.get("/health", include_in_schema=False)
