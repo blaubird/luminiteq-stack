@@ -28,32 +28,36 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
-    # 1) Миграции — создаём таблицы
-    print(">>> STARTUP: running Alembic migrations")
+    # === TEMP WHATSAPP TEST SEED START ===
+    # Создаём тестового арендатора только в DEV / sandbox
+    from db import SessionLocal
+    from models import Tenant
+
+    db = SessionLocal()
+    test_phone = os.getenv("WH_PHONE_ID", "15551743822")  # ваш тестовый номер
+    test_token = os.getenv("WH_TOKEN", "EACOZCs8g0GKIBOZBDyrIjfojEnfZBb0OUMWaKU35sZAZCevGIuapwyuIZAlXmnd6PIUTyCXXJZATt6VarUmkYKIPLSNyxdtiZAtnZBqBPC67wZCKOIms1LIP3SJuW6t2MaxlnNkoQQzAotdxQC3vZAIBsoN3swdI85TlJnlytIAWtMOsiQY4hSt2c9lktCkFuEeDozFDq3NZAXoJPCZBYX0wFovj8rNRDaHhwTVnNmFmD")
+    exists = db.query(Tenant).filter_by(phone_id=test_phone).first()
+    if not exists:
+        db.add(Tenant(
+            id="test-tenant",
+            phone_id=test_phone,
+            wh_token=test_token,
+            system_prompt="You are a helpful assistant."
+        ))
+        db.commit()
+    db.close()
+    # === TEMP WHATSAPP TEST SEED END ===
+
+    # Дальше ваши Alembic-миграции…
+    print(">>> STARTUP: running migrations")
     here = os.path.dirname(__file__)
     cfg_path = os.path.join(here, "alembic.ini")
     alembic_cfg = Config(cfg_path)
     fileConfig(alembic_cfg.config_file_name)
     command.upgrade(alembic_cfg, "head")
-    print(">>> STARTUP: migrations complete")
+    print(">>> FINISHED: migrations complete")
+    # … остальной код …
 
-    # 2) Теперь, когда таблицы точно есть, сеем тестового арендатора
-    print(">>> STARTUP: seeding test tenant")
-    from db import SessionLocal
-    from models import Tenant
-
-    db = SessionLocal()
-    test_phone = os.getenv("WH_PHONE_ID")
-    if test_phone and not db.query(Tenant).filter_by(phone_id=test_phone).first():
-        db.add(Tenant(
-            id="test-tenant",
-            phone_id=test_phone,
-            wh_token=os.getenv("WH_TOKEN"),
-            system_prompt="You are a helpful assistant."
-        ))
-        db.commit()
-    db.close()
-    print(">>> STARTUP: seeding complete")
 
 # Простая проверка здоровья
 @app.get("/health", include_in_schema=False)
