@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException
-from .db import SessionLocal
-from .models import Tenant
+from db import SessionLocal
+from models import Tenant
 
 def get_db():
     db: Session = SessionLocal()
