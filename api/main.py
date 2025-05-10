@@ -26,20 +26,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
-def startup(): 
-    # Явные принты — точно попадут в лог
+def startup():
+    # 1) print a marker so you know migration is starting
     print(">>> STARTUP: running Alembic migrations")
-    
-    # Готовим конфиг Alembic
-    here = os.path.dirname(__file__)
-    cfg_path = os.path.join(here, "alembic.ini")
-    alembic_cfg = Config(cfg_path)
-    
-    # Прогоняем все миграции до head
-    command.upgrade(alembic_cfg, "head")
-    
-    print(">>> FINISHED: Alembic migrations complete")
 
+    # 2) load alembic.ini (which contains your [loggers]/[handlers]/[formatters])
+    here = os.path.dirname(__file__)
+    ini_path = os.path.join(here, "alembic.ini")
+    alembic_cfg = Config(ini_path)
+    # THIS is the critical call that wires in the [loggers] section:
+    fileConfig(alembic_cfg.config_file_name)
+
+    # 3) actually run the migrations
+    command.upgrade(alembic_cfg, "head")
+
+    # 4) print a marker so you know it finished
+    print(">>> FINISHED: Alembic migrations complete")
 
 # Простая проверка здоровья
 @app.get("/health", include_in_schema=False)
