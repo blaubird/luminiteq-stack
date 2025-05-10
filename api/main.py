@@ -95,7 +95,13 @@ async def webhook(
                 ] or [{"role": "system", "content": tenant.system_prompt}]
 
                 # Запускаем AI-обработку и отправку в фоне
-                bg.add_task(handle_ai_reply, tenant, chat, sender, db)
+                bg.add_task(
+                    handle_ai_reply,
+                    tenant,
+                    chat,
+                    sender,
+                    db
+                )
 
     return {"status": "received"}
 
@@ -128,7 +134,10 @@ async def handle_ai_reply(tenant, chat, to: str, db):
 
 
 async def send_whatsapp(
-    business_phone_id: str, token: str, to: str, text: str
+    business_phone_id: str,
+    token: str,
+    to: str,
+    text: str
 ):
     url = f"https://graph.facebook.com/v19.0/{business_phone_id}/messages"
     payload = {
