@@ -1,18 +1,19 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base
+from models import Base  # Абсолютный импорт
 
-# Путь к БД: sqlite в файл api/local.db, или задаётся через env
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./api/local.db")
+# Если не задано, используем sqlite в файл local.db рядом с этим скриптом
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local.db")
 
 engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},  # для SQLite
 )
 SessionLocal = sessionmaker(
     autocommit=False, autoflush=False, bind=engine
 )
 
 def init_db():
-    # создаём все таблицы, если их ещё нет
+    # Создаёт local.db рядом с кодом, если его ещё нет
     Base.metadata.create_all(bind=engine)
