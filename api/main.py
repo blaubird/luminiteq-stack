@@ -7,20 +7,21 @@ from alembic import command
 import httpx
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from deps import get_db, tenant_by_phone_id
 from models import Message
 
 app = FastAPI()
-ai = AsyncOpenAI()  # будет использовать OPENAI_API_KEY из ENV
+ai = AsyncOpenAI()  # uses OPENAI_API_KEY from ENV
 
-# Настраиваем простой логгер
+# configure root logger to INFO so prints and Alembic logs appear
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
-    # === 1) Прогоняем Alembic-миграции ===
+    # === 1) Run Alembic migrations ===
     print(">>> STARTUP: running Alembic migrations")
     here = os.path.dirname(__file__)
     cfg_path = os.path.join(here, "alembic.ini")
@@ -29,8 +30,8 @@ def startup():
     command.upgrade(alembic_cfg, "head")
     print(">>> STARTUP: migrations complete")
 
-    # === 2) TEMP: seed тестового арендатора ===
-    # Удалить этот блок после проверки WhatsApp
+    # === 2) TEMP: seed test tenant for WhatsApp sandbox ===
+    # remove this block after verification
     from db import SessionLocal
     from models import Tenant
 
@@ -58,7 +59,7 @@ def startup():
 async def health():
     return {"ok": True}
 
-# --- Webhook verification ---
+# --- Webhook verification endpoint ---
 @app.get("/webhook", include_in_schema=False)
 async def verify_webhook(
     hub_mode: str = Query(None, alias="hub.mode"),
@@ -90,16 +91,28 @@ async def webhook(
                 text = msg.get("text", {}).get("body", "")
                 wa_msg_id = msg.get("id")
 
-                # Сохраняем входящее
-                db.add(Message(
-                    tenant_id=tenant.id,
-                    wa_msg_id=wa_msg_id,
-                    role="user",
-                    text=text
-                ))
-                db.commit()
+                # === DUPLICATE GUARD START ===
+                existing = db.query(Message).filter_by(wa_msg_id=wa_msg_id).first()
+                if existing:
+                    print(f">>> SKIP: duplicate wa_msg_id={wa_msg_id}")
+                    continue
+                # === DUPLICATE GUARD END ===
 
-                # Строим контекст (последние 10 сообщений)
+                # Save incoming message
+                try:
+                    db.add(Message(
+                        tenant_id=tenant.id,
+                        wa_msg_id=wa_msg_id,
+                        role="user",
+                        text=text
+                    ))
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
+                    print(f">>> IGNORE IntegrityError on wa_msg_id={wa_msg_id}")
+                    continue
+
+                # Build chat history (last 10 messages)
                 history = (
                     db.query(Message)
                       .filter_by(tenant_id=tenant.id)
@@ -112,7 +125,7 @@ async def webhook(
                     or [{"role": "system", "content": tenant.system_prompt}]
                 )
 
-                # === TEMP: немедленный тест-ответ через GPT-4o ===
+                # === TEMP: immediate reply via GPT-4o ===
                 try:
                     resp = await ai.chat.completions.create(
                         model="gpt-4o",
@@ -121,7 +134,6 @@ async def webhook(
                     latest_answer = resp.choices[0].message.content.strip()
                     print(">>> TEMP: generated answer:", latest_answer)
 
-                    # Отправка в WhatsApp
                     send_resp = await httpx.AsyncClient().post(
                         f"https://graph.facebook.com/v19.0/{tenant.phone_id}/messages",
                         headers={
@@ -145,7 +157,7 @@ async def webhook(
 
     return {"status": "received", "echo": latest_answer}
 
-# --- Фоновая задача (для постоянного кода) ---
+# --- Background task for production use ---
 async def handle_ai_reply(
     tenant,
     chat: list[dict],
