@@ -1,5 +1,7 @@
-from fastapi import FastAPI, Request, HTTPException, Response, Query
-import os, httpx
+import os
+
+import httpx
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 
 app = FastAPI()
 
