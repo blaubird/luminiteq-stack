@@ -1,5 +1,6 @@
 import os
-
+from alembic.config import Config
+from alembic import command
 import httpx
 from fastapi import (
     FastAPI,
@@ -24,6 +25,16 @@ ai = AsyncOpenAI()  # читает OPENAI_API_KEY из окружения
 @app.on_event("startup")
 def on_startup():
     init_db()
+    
+
+@app.on_event("startup")
+def run_migrations() -> None:
+    # путь до alembic.ini в папке с main.py
+    here = os.path.dirname(__file__)
+    cfg_path = os.path.join(here, "alembic.ini")
+    alembic_cfg = Config(cfg_path)
+    # применяем все миграции до head
+    command.upgrade(alembic_cfg, "head")
 
 # Простая проверка здоровья
 @app.get("/health", include_in_schema=False)
