@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException, Response, Query
-from fastapi.responses import HTMLResponse
-import os, httpx, hmac, hashlib, json
+import os, httpx
 
 app = FastAPI()
 
