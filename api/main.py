@@ -28,35 +28,32 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
-     print(">>> STARTUP: running Alembic migrations")
-    # --- Дальше идут Alembic-миграции ---
+    # 1) Миграции — создаём таблицы
+    print(">>> STARTUP: running Alembic migrations")
     here = os.path.dirname(__file__)
     cfg_path = os.path.join(here, "alembic.ini")
     alembic_cfg = Config(cfg_path)
     fileConfig(alembic_cfg.config_file_name)
     command.upgrade(alembic_cfg, "head")
+    print(">>> STARTUP: migrations complete")
 
-    print(">>> FINISHED: migrations complete")
-
-print(">>> STARTUP: seeding test tenant")
-    # === TEMP WHATSAPP TEST SEED START ===
+    # 2) Теперь, когда таблицы точно есть, сеем тестового арендатора
+    print(">>> STARTUP: seeding test tenant")
     from db import SessionLocal
     from models import Tenant
 
     db = SessionLocal()
-    # Создаём в БД «тестового» арендатора только если его нет
     test_phone = os.getenv("WH_PHONE_ID")
     if test_phone and not db.query(Tenant).filter_by(phone_id=test_phone).first():
         db.add(Tenant(
-            id="test-tenant",               # ID для теста
-            phone_id=test_phone,            # из WH_PHONE_ID
-            wh_token=os.getenv("WH_TOKEN"), # из WH_TOKEN
+            id="test-tenant",
+            phone_id=test_phone,
+            wh_token=os.getenv("WH_TOKEN"),
             system_prompt="You are a helpful assistant."
         ))
         db.commit()
     db.close()
-print(">>> STARTUP: seeding complete")
-    # === TEMP WHATSAPP TEST SEED END ===
+    print(">>> STARTUP: seeding complete")
 
 # Простая проверка здоровья
 @app.get("/health", include_in_schema=False)
