@@ -12,10 +12,19 @@ from sqlalchemy.exc import IntegrityError
 from deps import get_db, tenant_by_phone_id
 from models import Message
 
-app = FastAPI()
-ai = AsyncOpenAI()  # uses OPENAI_API_KEY from ENV
+# — Очистка ENV-переменных от лишних пробелов/переносов строки —
+if os.getenv("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY").strip()
+if os.getenv("WH_TOKEN"):
+    os.environ["WH_TOKEN"] = os.getenv("WH_TOKEN").strip()
+if os.getenv("WH_PHONE_ID"):
+    os.environ["WH_PHONE_ID"] = os.getenv("WH_PHONE_ID").strip()
 
-# configure root logger to INFO so prints and Alembic logs appear
+app = FastAPI()
+# Явно передаём API-ключ (уже без \n)
+ai = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Логирование INFO в stdout
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -31,13 +40,13 @@ def startup():
     print(">>> STARTUP: migrations complete")
 
     # === 2) TEMP: seed test tenant for WhatsApp sandbox ===
-    # remove this block after verification
+    # remove entire block after verification
     from db import SessionLocal
     from models import Tenant
 
     db = SessionLocal()
-    phone = os.getenv("WH_PHONE_ID")
-    token = os.getenv("WH_TOKEN")
+    phone = os.getenv("WH_PHONE_ID")  # уже очищен
+    token = os.getenv("WH_TOKEN")     # уже очищен
     if phone and token:
         exists = db.query(Tenant).filter_by(phone_id=phone).first()
         if not exists:
@@ -134,10 +143,12 @@ async def webhook(
                     latest_answer = resp.choices[0].message.content.strip()
                     print(">>> TEMP: generated answer:", latest_answer)
 
+                    # clean token from tenant in case it has newline
+                    wh_token = tenant.wh_token.strip()
                     send_resp = await httpx.AsyncClient().post(
                         f"https://graph.facebook.com/v19.0/{tenant.phone_id}/messages",
                         headers={
-                            "Authorization": f"Bearer {tenant.wh_token}",
+                            "Authorization": f"Bearer {wh_token}",
                             "Content-Type": "application/json",
                         },
                         json={
@@ -177,9 +188,10 @@ async def handle_ai_reply(
     ))
     db.commit()
 
+    wh_token = tenant.wh_token.strip()
     await httpx.AsyncClient().post(
         f"https://graph.facebook.com/v19.0/{tenant.phone_id}/messages",
-        headers={"Authorization": f"Bearer {tenant.wh_token}"},
+        headers={"Authorization": f"Bearer {wh_token}"},
         json={
             "messaging_product": "whatsapp",
             "to": to,
