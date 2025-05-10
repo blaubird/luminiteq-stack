@@ -28,8 +28,17 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
-    print(">>> STARTUP: seeding test tenant and running Alembic migrations")
+     print(">>> STARTUP: running Alembic migrations")
+    # --- Дальше идут Alembic-миграции ---
+    here = os.path.dirname(__file__)
+    cfg_path = os.path.join(here, "alembic.ini")
+    alembic_cfg = Config(cfg_path)
+    fileConfig(alembic_cfg.config_file_name)
+    command.upgrade(alembic_cfg, "head")
 
+    print(">>> FINISHED: migrations complete")
+
+print(">>> STARTUP: seeding test tenant")
     # === TEMP WHATSAPP TEST SEED START ===
     from db import SessionLocal
     from models import Tenant
@@ -46,18 +55,8 @@ def startup():
         ))
         db.commit()
     db.close()
+print(">>> STARTUP: seeding complete")
     # === TEMP WHATSAPP TEST SEED END ===
-
-    # --- Дальше идут Alembic-миграции ---
-    here = os.path.dirname(__file__)
-    cfg_path = os.path.join(here, "alembic.ini")
-    alembic_cfg = Config(cfg_path)
-    fileConfig(alembic_cfg.config_file_name)
-    command.upgrade(alembic_cfg, "head")
-
-    print(">>> FINISHED: migrations complete")
-
-
 
 # Простая проверка здоровья
 @app.get("/health", include_in_schema=False)
