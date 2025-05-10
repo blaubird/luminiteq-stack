@@ -1,3 +1,4 @@
+import logging
 import os
 from alembic.config import Config
 from alembic import command
@@ -21,6 +22,8 @@ from models import Message
 app = FastAPI()
 ai = AsyncOpenAI()  # читает OPENAI_API_KEY из окружения
     
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def run_migrations() -> None:
@@ -30,6 +33,17 @@ def run_migrations() -> None:
     alembic_cfg = Config(cfg_path)
     # применяем все миграции до head
     command.upgrade(alembic_cfg, "head")
+
+@app.on_event("startup")
+def startup():
+    logger.info("Running Alembic migrations…")
+    here = os.path.dirname(__file__)
+    cfg = Config(os.path.join(here, "alembic.ini"))
+    command.upgrade(cfg, "head")
+    logger.info("Alembic migrations completed.")
+    # если очень нужен init_db для dev (SQLite), можно раскомментировать:
+    # from db import init_db
+    # init_db()
 
 # Простая проверка здоровья
 @app.get("/health", include_in_schema=False)
