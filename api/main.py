@@ -20,11 +20,6 @@ from models import Message
 
 app = FastAPI()
 ai = AsyncOpenAI()  # читает OPENAI_API_KEY из окружения
-
-# При старте сервиса создаём таблицы, если их ещё нет
-@app.on_event("startup")
-def on_startup():
-    init_db()
     
 
 @app.on_event("startup")
